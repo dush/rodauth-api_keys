@@ -673,3 +673,10 @@ module Rodauth
     end
   end
 end
+
+# With rodauth-model, the account model gets an api_keys association.
+if defined?(Rodauth::Model)
+  Rodauth::Model.register_association(:api_keys) do
+    {name: :api_keys, type: :many, table: api_keys_table, key: api_keys_account_id_column}
+  end
+end

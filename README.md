@@ -17,6 +17,7 @@ Authorization: Bearer rak_Qb4JPgNpNhcsdekspshofQVvGUcpchLRstT6HAu7EQS
 - [Management pages](#management-pages)
 - [JSON API](#json-api)
 - [Internal requests](#internal-requests)
+- [Model association](#model-association)
 - [Configuration reference](#configuration-reference)
 - [Security](#security)
 - [Development](#development)
@@ -229,6 +230,23 @@ App.rodauth.revoke_api_key(account_login: "user@example.com", api_key_id: result
 ```
 
 Internal requests do not ask for the password. An error raises `Rodauth::InternalRequestError`.
+
+## Model association
+
+With [rodauth-model](https://github.com/janko/rodauth-model), the account model gets an `api_keys` association.
+Require `rodauth/model` before you enable `api_keys`. The feature registers the association only when `Rodauth::Model` is defined.
+
+```ruby
+class Account < Sequel::Model
+  include Rodauth::Model(RodauthApp.rodauth)
+end
+
+account.api_keys # => [#<Account::ApiKey @values={id: 1, name: "CI server", ...}>]
+account.api_keys_dataset.where(revoked_at: nil)
+```
+
+The rows contain the key digest and the key hint. They do not contain the API key.
+When you remove the account with `destroy`, the model also removes its API key rows.
 
 ## Configuration reference
 
