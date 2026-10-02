@@ -4,6 +4,18 @@ require "date"
 require "time"
 
 module Rodauth
+  # Rodauth calls before_rodauth at the start of each route.
+  # A before_rodauth block in the configuration replaces the method of a feature.
+  # Thus the api_keys feature prepends this module to the Rodauth class. The block cannot remove the check.
+  module ApiKeysRouteCheck
+    private
+
+    def before_rodauth
+      require_api_key_management_session
+      super
+    end
+  end
+
   Feature.define(:api_keys, :ApiKeys) do
     depends :require_hmac_secret
 
@@ -30,7 +42,7 @@ module Rodauth
     translatable_method :invalid_api_key_scopes_message, "invalid scope"
     translatable_method :api_key_scopes_required_message, "select one or more scopes"
     translatable_method :api_keys_limit_message, "maximum number of active API keys"
-    translatable_method :api_key_management_not_permitted_message, "an API key cannot manage API keys"
+    translatable_method :api_key_management_not_permitted_message, "an API key cannot use this route"
     auth_value_method :api_key_management_not_permitted_error_status, 403
 
     # Page with the list of API keys.
@@ -137,7 +149,6 @@ module Rodauth
 
     route(:api_keys) do |r|
       require_account
-      require_api_key_management_session
       before_api_keys_route
       _return_from_internal_request(account_api_keys) if internal_request?
 
@@ -156,7 +167,6 @@ module Rodauth
 
     route(:revoke_api_key) do |r|
       require_account
-      require_api_key_management_session
       before_revoke_api_key_route
 
       r.get do
@@ -191,7 +201,6 @@ module Rodauth
 
     route(:create_api_key) do |r|
       require_account
-      require_api_key_management_session
       before_create_api_key_route
 
       r.get do
@@ -245,6 +254,9 @@ module Rodauth
           raise ConfigurationError, "enable :api_keys after :#{feature_name} and the features that use it"
         end
       end
+
+      # An API key must not use the Rodauth routes, for example to change the login or to set a remember cookie.
+      self.class.prepend(ApiKeysRouteCheck) unless self.class < ApiKeysRouteCheck
 
       api_key_scopes.each do |scope|
         unless scope.is_a?(String) && scope.match?(/\A[!#-\[\]-~]+\z/)
@@ -517,7 +529,8 @@ module Rodauth
       File.file?(path) ? path : super
     end
 
-    # An API key must not create or revoke API keys. Send a 403 response for a request that an API key authenticated.
+    # An API key must not use the Rodauth routes. It must not manage the account or its API keys.
+    # Send a 403 response for a request that an API key authenticated.
     def require_api_key_management_session
       return unless api_key_authenticated?
 

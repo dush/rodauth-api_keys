@@ -192,7 +192,7 @@ class Rodauth::TestApiKeysLifecycle < RodauthTestCase
     body = json_request("/api-keys", {}, bearer(api_key))
 
     assert_equal 403, last_response.status
-    assert_equal "an API key cannot manage API keys", body["error"]
+    assert_equal "an API key cannot use this route", body["error"]
     assert_nil last_response["authorization"]
   end
 
@@ -204,7 +204,7 @@ class Rodauth::TestApiKeysLifecycle < RodauthTestCase
     get "/api-keys", {}, bearer(api_key)
 
     assert_equal 403, last_response.status
-    assert_equal "an API key cannot manage API keys", last_response.body
+    assert_equal "an API key cannot use this route", last_response.body
     assert_equal "text/plain", last_response["content-type"]
   end
 

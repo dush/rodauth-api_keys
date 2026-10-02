@@ -21,6 +21,33 @@ Sequel.migration do
       String :password_hash, null: false
     end
 
+    # Tables of other Rodauth features. Tests check that these features work with API keys.
+    create_table(:account_remember_keys) do
+      foreign_key :id, :accounts, primary_key: true, type: :Bignum
+      String :key, null: false
+      DateTime :deadline, null: false
+    end
+
+    create_table(:account_active_session_keys) do
+      foreign_key :account_id, :accounts, type: :Bignum
+      String :session_id
+      Time :created_at, null: false, default: Sequel::CURRENT_TIMESTAMP
+      Time :last_use, null: false, default: Sequel::CURRENT_TIMESTAMP
+      primary_key [:account_id, :session_id]
+    end
+
+    create_table(:account_session_keys) do
+      foreign_key :id, :accounts, primary_key: true, type: :Bignum
+      String :key, null: false
+    end
+
+    create_table(:account_verification_keys) do
+      foreign_key :id, :accounts, primary_key: true, type: :Bignum
+      String :key, null: false
+      DateTime :requested_at, null: false, default: Sequel::CURRENT_TIMESTAMP
+      DateTime :email_last_sent, null: false, default: Sequel::CURRENT_TIMESTAMP
+    end
+
     create_table(:account_api_keys) do
       primary_key :id, type: :Bignum
       foreign_key :account_id, :accounts, type: :Bignum, null: false

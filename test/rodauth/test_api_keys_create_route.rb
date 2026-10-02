@@ -308,7 +308,7 @@ class Rodauth::TestApiKeysCreateRoute < RodauthTestCase
     post "/create-api-key", create_params, {"HTTP_AUTHORIZATION" => "Bearer #{api_key}"}
 
     assert_equal 403, last_response.status
-    assert_equal "an API key cannot manage API keys", last_response.body
+    assert_equal "an API key cannot use this route", last_response.body
     assert_equal 1, api_key_rows.count
   end
 

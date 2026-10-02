@@ -169,7 +169,7 @@ Set the value to `nil` to update the column on each request.
 Rules for these routes:
 
 - The account must be logged in.
-- A request that an API key authenticated gets `403`. An API key cannot create or revoke API keys.
+- A request that an API key authenticated gets `403`. An API key cannot create or revoke API keys. See [Security](#security).
 - If the account has a password, the form asks for it.
 - The page that shows the new API key sends `Cache-Control: no-store`.
 
@@ -252,7 +252,7 @@ Internal requests do not ask for the password. An error raises `Rodauth::Interna
 | `api_key_name_param`, `api_key_expires_at_param`, `api_key_scopes_param`, `api_key_id_param` | `"api_key_name"`, ... | Parameter names. |
 | `api_keys_route`, `create_api_key_route`, `revoke_api_key_route` | `"api-keys"`, ... | Route names. |
 | `insufficient_api_key_scope_error_status` | `403` | The status for a missing scope. |
-| `api_key_management_not_permitted_error_status` | `403` | The status for a management request with an API key. |
+| `api_key_management_not_permitted_error_status` | `403` | The status for a request to a Rodauth route with an API key. |
 
 To accept the `Token` scheme too:
 
@@ -294,7 +294,8 @@ end
 - The feature does not write the API key to logs or to error messages.
 - A closed account cannot use its API keys. `close_account` revokes them. If `close_account` calls `delete_account`, the feature removes the API key rows first.
 - With the `jwt` feature, a response to an API key request does not contain a JWT. Such a JWT would authenticate the account without the API key.
-- An API key cannot create, list, or revoke API keys.
+- An API key cannot use the Rodauth routes. For example, it cannot change the login, set a remember cookie, or create API keys. The response is `403`.
+  The feature prepends a check to `before_rodauth`. A `before_rodauth` block in your configuration does not remove the check.
 
 ### Remove old rows
 
