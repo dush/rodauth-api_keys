@@ -593,14 +593,15 @@ module Rodauth
       row = api_keys_table_ds.where(api_keys_digest_column => digests).where(active_api_key_condition).first
       invalid_api_key_response unless row
 
-      # Use the account checks of a cookie session: the account must exist and be open.
+      # The account must exist and be open. Do not use the status filter of a cookie session.
+      # The verify_account_grace_period feature adds unverified accounts to that filter.
       # Do not keep the account. A Rodauth route loads it again and shows a warning when it loads it two times.
       @session = {
         session_key => row[api_keys_account_id_column],
         authenticated_by_session_key => ["api_key"],
         api_key_id_session_key => row[api_keys_id_column]
       }
-      invalid_api_key_response unless _account_from_session
+      invalid_api_key_response unless api_key_account_open?(row[api_keys_account_id_column])
 
       @api_key_row = row
       if hmac_secret_rotation? && row[api_keys_digest_column] != digests.first
@@ -608,6 +609,12 @@ module Rodauth
       end
       update_api_key_last_use
       @session
+    end
+
+    def api_key_account_open?(id)
+      ds = account_ds(id)
+      ds = ds.where(account_status_column => account_open_status_value) unless skip_status_checks?
+      !ds.empty?
     end
 
     def invalid_api_key_response

@@ -142,6 +142,17 @@ class Rodauth::TestApiKeysAuthentication < RodauthTestCase
     assert_invalid_api_key_response
   end
 
+  # The verify_account_grace_period feature lets an unverified account use a cookie session. It must not use an API key.
+  def test_api_key_of_unverified_account_in_grace_period_sends_401
+    api_key = setup_api_key(features: [:verify_account_grace_period])
+    DB[:accounts].where(id: @account_id).update(status_id: 1)
+    DB[:account_verification_keys].insert(id: @account_id, key: "key")
+
+    get "/require-authentication", {}, bearer(api_key)
+
+    assert_invalid_api_key_response
+  end
+
   def test_other_authorization_values_are_ignored
     api_key = setup_api_key
 

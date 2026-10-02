@@ -292,6 +292,7 @@ end
 - The database keeps the HMAC-SHA256 digest of the API key, not the API key. A copy of the database does not give the API keys without `hmac_secret`.
 - During a rotation of `hmac_secret`, set `hmac_old_secret`. The feature accepts the old digest and writes the new digest at the next use of the API key.
 - The feature does not write the API key to logs or to error messages.
+- An unverified account cannot use API keys. This is also true in the grace period of `verify_account_grace_period`.
 - A closed account cannot use its API keys. `close_account` revokes them. If `close_account` calls `delete_account`, the feature removes the API key rows first.
 - With the `jwt` feature, a response to an API key request does not contain a JWT. Such a JWT would authenticate the account without the API key.
 - An API key cannot use the Rodauth routes. For example, it cannot change the login, set a remember cookie, or create API keys. The response is `403`.
