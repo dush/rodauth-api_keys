@@ -25,6 +25,18 @@ class Rodauth::TestApiKeysAuthentication < RodauthTestCase
       rodauth.api_key_scope?(scope).to_s
     end
 
+    r.is "active-session" do
+      rodauth.check_active_session
+      rodauth.require_authentication
+      "active"
+    end
+
+    r.is "single-session" do
+      rodauth.check_single_session
+      rodauth.require_authentication
+      "active"
+    end
+
     r.is "clear-session" do
       rodauth.clear_session
       "cleared"
@@ -346,6 +358,56 @@ class Rodauth::TestApiKeysAuthentication < RodauthTestCase
     login
     get "/require-authentication"
     assert_equal 302, last_response.status
+  end
+
+  def test_active_sessions_accepts_api_key_request
+    api_key = setup_api_key(features: [:active_sessions])
+
+    get "/active-session", {}, bearer(api_key)
+
+    assert_equal 200, last_response.status
+    assert_equal "active", last_response.body
+  end
+
+  def test_active_sessions_checks_cookie_session
+    setup_api_key(features: [:active_sessions])
+    login
+    DB[:account_active_session_keys].delete
+
+    get "/active-session"
+
+    assert_equal 302, last_response.status
+  end
+
+  def test_single_session_accepts_api_key_request
+    api_key = setup_api_key(features: [:single_session])
+    # The account has a session in a browser.
+    DB[:account_session_keys].insert(id: @account_id, key: "browser session key")
+
+    get "/single-session", {}, bearer(api_key)
+
+    assert_equal 200, last_response.status
+    assert_equal "active", last_response.body
+  end
+
+  def test_single_session_checks_cookie_session
+    setup_api_key(features: [:single_session])
+    login
+    DB[:account_session_keys].update(key: "other session key")
+
+    get "/single-session"
+
+    assert_equal 302, last_response.status
+  end
+
+  def test_session_features_after_api_keys_raise_configuration_error
+    [:active_sessions, :single_session].each do |feature_name|
+      error = assert_raises(Rodauth::ConfigurationError) do
+        rodauth_object { enable feature_name }
+      end
+
+      assert_equal "enable :api_keys after :#{feature_name} and the features that use it", error.message
+    end
   end
 
   def test_two_factor_base_after_api_keys_raises_configuration_error

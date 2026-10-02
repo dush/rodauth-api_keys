@@ -88,7 +88,7 @@ Read `lib/rodauth/features/*.rb` in Rodauth before you write a new feature metho
 
 ### Feature order
 
-This feature overrides methods of `two_factor_base` and `jwt`. These overrides work only when `api_keys` comes later in the `enable` list.
+This feature overrides methods of `two_factor_base`, `jwt`, `active_sessions`, and `single_session`. These overrides work only when `api_keys` comes later in the `enable` list.
 `post_configure` raises `Rodauth::ConfigurationError` if the order is wrong.
 If you override a method of another feature, add that feature to the check in `post_configure`.
 Use `super if defined?(super)` in hooks such as `after_close_account`. Then the order is not important for them.

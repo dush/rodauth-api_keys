@@ -248,7 +248,7 @@ module Rodauth
 
       # This feature overrides methods of these features. Thus it must come before them in the method lookup.
       ancestors = self.class.ancestors
-      [:two_factor_base, :jwt].each do |feature_name|
+      [:two_factor_base, :jwt, :active_sessions, :single_session].each do |feature_name|
         next unless (feature = FEATURES[feature_name]) && ancestors.include?(feature)
         if ancestors.index(feature) < ancestors.index(FEATURES[:api_keys])
           raise ConfigurationError, "enable :api_keys after :#{feature_name} and the features that use it"
@@ -327,6 +327,12 @@ module Rodauth
 
     # The account used all its authentication factors when it created the API key.
     def two_factor_authenticated?
+      api_key_authenticated? || super
+    end
+
+    # A request that an API key authenticated has no session ID and no single session key.
+    # The active_sessions and single_session features must not end such a request.
+    def currently_active_session?
       api_key_authenticated? || super
     end
 

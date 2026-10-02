@@ -31,7 +31,7 @@ Authorization: Bearer rak_Qb4JPgNpNhcsdekspshofQVvGUcpchLRstT6HAu7EQS
 - Each account can have a maximum number of active API keys.
 - HTML pages and JSON responses for the management routes.
 - Internal request methods for create, list, and revoke.
-- The feature works with the `json`, `jwt`, `two_factor_base`, `close_account`, `change_password`, `reset_password`, `audit_logging`, and `internal_request` features.
+- The feature works with the `json`, `jwt`, `active_sessions`, `single_session`, `two_factor_base`, `close_account`, `change_password`, `reset_password`, `audit_logging`, and `internal_request` features.
 
 The feature uses only Rodauth and the Ruby standard library.
 
@@ -90,7 +90,7 @@ plugin :rodauth do
 end
 ```
 
-Feature order: enable `api_keys` after `jwt`, `two_factor_base`, and the features that use `two_factor_base` (`otp`, `sms_codes`, `webauthn`, `recovery_codes`).
+Feature order: enable `api_keys` after `jwt`, `active_sessions`, `single_session`, `two_factor_base`, and the features that use `two_factor_base` (`otp`, `sms_codes`, `webauthn`, `recovery_codes`).
 If the order is wrong, Rodauth raises `Rodauth::ConfigurationError` when the application starts.
 
 ```ruby
