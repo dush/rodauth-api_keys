@@ -9,6 +9,7 @@ require "rack/test"
 require "roda"
 require "securerandom"
 require "sequel"
+require "tilt/string"
 
 require "minitest/autorun"
 
@@ -24,7 +25,7 @@ class RodauthTestCase < Minitest::Test
 
   LOGIN = "foo@example.com"
   PASSWORD = "0123456789"
-  LAYOUT = "<html><body><p id=\"error\">\#{flash[:error]}</p><p id=\"notice\">\#{flash[:notice]}</p>\#{yield}</body></html>"
+  LAYOUT = "<html><body><p id=\"error\">\#{flash['error']}</p><p id=\"notice\">\#{flash['notice']}</p>\#{yield}</body></html>"
 
   attr_reader :app
 
@@ -41,7 +42,7 @@ class RodauthTestCase < Minitest::Test
     app = Class.new(Roda)
     app.plugin :sessions, secret: SecureRandom.random_bytes(64), key: "rack.session"
     app.plugin :flash
-    app.plugin :render, layout_opts: {inline: LAYOUT}
+    app.plugin :render, layout_opts: {inline: LAYOUT, engine: "str"}
     app.plugin :json_parser, content_type_regexp: /\Aapplication\/json\b/i if json
 
     rodauth_opts = {}

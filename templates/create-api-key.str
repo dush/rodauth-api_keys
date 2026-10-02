@@ -1,0 +1,24 @@
+<form method="post" class="rodauth" role="form" id="create-api-key-form">
+  #{rodauth.create_api_key_additional_form_tags}
+  #{rodauth.csrf_tag}
+  <div class="form-group mb-3">
+    <label for="api-key-name" class="form-label">#{rodauth.api_key_name_label}#{rodauth.input_field_label_suffix}</label>
+    #{rodauth.input_field_string(rodauth.api_key_name_param, "api-key-name", :attr=>"maxlength=\"#{rodauth.api_key_name_max_length}\"")}
+  </div>
+  <div class="form-group mb-3">
+    <label for="api-key-expires-at" class="form-label">#{rodauth.api_key_expires_at_label}#{rodauth.input_field_label_suffix}</label>
+    #{rodauth.input_field_string(rodauth.api_key_expires_at_param, "api-key-expires-at", :type=>"date", :required=>!!rodauth.api_key_max_lifetime)}
+  </div>
+  #{unless rodauth.api_key_scopes.empty?
+    selected = Array(rodauth.raw_param(rodauth.api_key_scopes_param))
+    checkboxes = rodauth.api_key_scopes.map do |scope|
+      id = "api-key-scope-#{h scope}"
+      checked = 'checked="checked"' if selected.include?(scope)
+      input = rodauth.input_field_string("#{rodauth.api_key_scopes_param}[]", id, :type=>"checkbox", :class=>"form-check-input", :value=>h(scope), :required=>false, :skip_error_message=>true, :attr=>checked)
+      "<div class=\"form-check\">#{input}<label class=\"form-check-label\" for=\"#{id}\">#{h scope}</label></div>"
+    end.join("\n")
+    "<fieldset class=\"form-group mb-3\"><legend class=\"form-label\">#{rodauth.api_key_scopes_label}</legend>#{checkboxes}#{rodauth.formatted_field_error(rodauth.api_key_scopes_param)}</fieldset>"
+  end}
+  #{rodauth.render('password-field') if rodauth.modifications_require_password?}
+  #{rodauth.button(rodauth.create_api_key_button)}
+</form>

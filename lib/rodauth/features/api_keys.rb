@@ -1,8 +1,37 @@
 # frozen_string_literal: true
 
+require "date"
+require "time"
+
 module Rodauth
   Feature.define(:api_keys, :ApiKeys) do
     depends :require_hmac_secret
+
+    # Page to create an API key.
+    notice_flash "Your API key is ready. Copy it now. You cannot see it again.", "create_api_key"
+    error_flash "Unable to create the API key", "create_api_key"
+    loaded_templates %w[create-api-key api-key-created password-field]
+    view "create-api-key", "Create API Key", "create_api_key"
+    view "api-key-created", "API Key Created", "api_key_created"
+    additional_form_tags "create_api_key"
+    button "Create API Key", "create_api_key"
+    before "create_api_key"
+    after "create_api_key"
+
+    translatable_method :api_key_label, "API key"
+    translatable_method :api_key_name_label, "Name"
+    translatable_method :api_key_expires_at_label, "Expiration date"
+    translatable_method :api_key_scopes_label, "Scopes"
+    translatable_method :invalid_api_key_name_message, "invalid name"
+    translatable_method :invalid_api_key_expires_at_message, "invalid expiration date"
+    translatable_method :api_key_expires_at_required_message, "expiration date is necessary"
+    translatable_method :api_key_expires_at_past_message, "expiration date must be in the future"
+    translatable_method :api_key_expires_at_too_late_message, "expiration date is too late"
+    translatable_method :invalid_api_key_scopes_message, "invalid scope"
+    translatable_method :api_key_scopes_required_message, "select one or more scopes"
+    translatable_method :api_keys_limit_message, "maximum number of active API keys"
+    translatable_method :api_key_management_not_permitted_message, "an API key cannot manage API keys"
+    auth_value_method :api_key_management_not_permitted_error_status, 403
 
     # Format of an API key: "<api_key_prefix>_<secret>".
     auth_value_method :api_key_prefix, "rak"
@@ -25,6 +54,7 @@ module Rodauth
 
     # Limits and policies.
     auth_value_method :api_keys_limit, 10
+    auth_value_method :api_key_name_max_length, 100
     auth_value_method :api_key_scopes, [].freeze
     auth_value_method :api_key_max_lifetime, nil
     auth_value_method :api_key_last_use_update_interval, 60
@@ -46,6 +76,10 @@ module Rodauth
     auth_value_methods :api_key_authorization_regexp
 
     auth_methods(
+      :api_key_created_response,
+      :parse_api_key_expires_at,
+      :valid_api_key_name?,
+      :valid_api_key_scopes?,
       :api_key_authenticated?,
       :api_key_digest,
       :api_key_digests,
@@ -60,10 +94,49 @@ module Rodauth
       :update_api_key_last_use
     )
 
-    uses_instance_variables(:@created_api_key_id, :@session, :@api_key_row)
+    uses_instance_variables(:@created_api_key_id, :@created_api_key, :@session, :@api_key_row)
 
     # The ID of the row that the last call to create_api_key added.
     attr_reader :created_api_key_id
+
+    # The API key that the create-api-key route added in this request. The created page shows it.
+    attr_reader :created_api_key
+
+    route(:create_api_key) do |r|
+      require_account
+      require_api_key_management_session
+      before_create_api_key_route
+
+      r.get do
+        create_api_key_view
+      end
+
+      r.post do
+        catch_error do
+          if modifications_require_password? && !password_match?(param(password_param))
+            throw_error_reason(:invalid_password, invalid_password_error_status, password_param, invalid_password_message)
+          end
+
+          name = api_key_name_param_value
+          scopes = api_key_scopes_param_value
+          expires_in = api_key_expires_in_param_value
+
+          transaction do
+            before_create_api_key
+            if api_keys_limit && active_api_keys_ds.count >= api_keys_limit
+              throw_error_reason(:api_keys_limit, invalid_field_error_status, api_key_name_param, api_keys_limit_message)
+            end
+            @created_api_key = create_api_key(name, scopes: scopes, expires_in: expires_in)
+            after_create_api_key
+          end
+
+          api_key_created_response
+        end
+
+        set_error_flash create_api_key_error_flash
+        create_api_key_view
+      end
+    end
 
     # The first capture group must contain the API key.
     def api_key_authorization_regexp
@@ -173,6 +246,52 @@ module Rodauth
       ds.update(api_keys_last_use_column => Sequel::CURRENT_TIMESTAMP)
     end
 
+    # Return true if the name is not empty and not too long.
+    def valid_api_key_name?(name)
+      !name.empty? && name.length <= api_key_name_max_length
+    end
+
+    # Return true if api_key_scopes contains each scope.
+    def valid_api_key_scopes?(scopes)
+      scopes.all? { |scope| scope.is_a?(String) && api_key_scopes.include?(scope) }
+    end
+
+    # Return the expiration time for the value of the form field, or nil if the value is not valid.
+    # A date without a time ("2026-12-31") is the last second of that day in the time zone of the application.
+    # A full ISO 8601 time ("2026-12-31T12:00:00Z") is also valid.
+    def parse_api_key_expires_at(value)
+      if value.match?(/\A\d{4}-\d{2}-\d{2}\z/)
+        date = Date.iso8601(value)
+        Time.new(date.year, date.month, date.day, 23, 59, 59)
+      else
+        Time.iso8601(value)
+      end
+    rescue ArgumentError
+      nil
+    end
+
+    # Show the new API key one time. Tell the browser and proxies not to keep a copy of the page.
+    def api_key_created_response
+      set_response_header("cache-control", "no-store")
+      set_notice_now_flash create_api_key_notice_flash
+
+      if respond_to?(:use_json?) && use_json?
+        row = api_keys_table_ds.where(api_keys_id_column => created_api_key_id).first
+        expires_at = row[api_keys_expires_at_column]
+        json_response.merge!(
+          "api_key" => created_api_key,
+          "api_key_id" => created_api_key_id,
+          "name" => row[api_keys_name_column],
+          "hint" => row[api_keys_hint_column],
+          "scopes" => row[api_keys_scopes_column].to_s.split(" "),
+          "expires_at" => (convert_timestamp(expires_at).iso8601 if expires_at)
+        )
+        return_json_response
+      end
+
+      return_response(api_key_created_view)
+    end
+
     # Return a new API key: the prefix, an underscore, and a random secret.
     # The secret contains only letters and digits.
     def generate_api_key
@@ -227,6 +346,68 @@ module Rodauth
       true
     end
 
+    def template_path(page)
+      path = File.expand_path("../../../templates/#{page}.str", __dir__)
+      File.file?(path) ? path : super
+    end
+
+    # An API key must not create or revoke API keys. Send a 403 response for a request that an API key authenticated.
+    def require_api_key_management_session
+      return unless api_key_authenticated?
+
+      set_response_error_reason_status(:api_key_management_not_permitted, api_key_management_not_permitted_error_status)
+      return_api_key_error_response(api_key_management_not_permitted_message)
+    end
+
+    def api_key_name_param_value
+      name = param(api_key_name_param).strip
+      unless valid_api_key_name?(name)
+        throw_error_reason(:invalid_api_key_name, invalid_field_error_status, api_key_name_param, invalid_api_key_name_message)
+      end
+      name
+    end
+
+    # The parameter can be an array (HTML check boxes or JSON) or a string with scopes separated by spaces.
+    def api_key_scopes_param_value
+      scopes = case (value = raw_param(api_key_scopes_param))
+      when nil then []
+      when Array then value.uniq
+      when String then value.split.uniq
+      end
+
+      unless scopes && valid_api_key_scopes?(scopes)
+        throw_error_reason(:invalid_api_key_scopes, invalid_field_error_status, api_key_scopes_param, invalid_api_key_scopes_message)
+      end
+      if scopes.empty? && !api_key_scopes.empty?
+        throw_error_reason(:api_key_scopes_required, invalid_field_error_status, api_key_scopes_param, api_key_scopes_required_message)
+      end
+      scopes
+    end
+
+    # Return the lifetime in seconds, or nil for an API key that does not expire.
+    def api_key_expires_in_param_value
+      value = param(api_key_expires_at_param).strip
+      if value.empty?
+        if api_key_max_lifetime
+          throw_error_reason(:api_key_expires_at_required, invalid_field_error_status, api_key_expires_at_param, api_key_expires_at_required_message)
+        end
+        return
+      end
+
+      unless (expires_at = parse_api_key_expires_at(value))
+        throw_error_reason(:invalid_api_key_expires_at, invalid_field_error_status, api_key_expires_at_param, invalid_api_key_expires_at_message)
+      end
+
+      expires_in = (expires_at - Time.now).ceil
+      if expires_in <= 0
+        throw_error_reason(:api_key_expires_at_past, invalid_field_error_status, api_key_expires_at_param, api_key_expires_at_past_message)
+      end
+      if api_key_max_lifetime && expires_in > api_key_max_lifetime
+        throw_error_reason(:api_key_expires_at_too_late, invalid_field_error_status, api_key_expires_at_param, api_key_expires_at_too_late_message)
+      end
+      expires_in
+    end
+
     # Find the active API key and its account. Return the session hash for the request.
     def api_key_session(api_key)
       digests = api_key_digests(api_key)
@@ -234,12 +415,13 @@ module Rodauth
       invalid_api_key_response unless row
 
       # Use the account checks of a cookie session: the account must exist and be open.
+      # Do not keep the account. A Rodauth route loads it again and shows a warning when it loads it two times.
       @session = {
         session_key => row[api_keys_account_id_column],
         authenticated_by_session_key => ["api_key"],
         api_key_id_session_key => row[api_keys_id_column]
       }
-      invalid_api_key_response unless account_from_session
+      invalid_api_key_response unless _account_from_session
 
       @api_key_row = row
       if hmac_secret_rotation? && row[api_keys_digest_column] != digests.first

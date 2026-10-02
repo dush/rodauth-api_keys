@@ -203,12 +203,22 @@ Each route:
 The `create-api-key` route refuses a new API key when the account has `api_keys_limit` active API keys.
 It counts the active API keys in the same transaction as the insert.
 
+The page that shows the new API key sends `Cache-Control: no-store`. The browser and proxies must not keep a copy of the API key.
+
+The `api_key_expires_at` parameter accepts:
+
+- A date (`2026-12-31`). The API key expires at 23:59:59 on that day, in the time zone of the application.
+- A full ISO 8601 time (`2026-12-31T12:00:00Z`).
+
+The `api_key_scopes` parameter accepts an array (HTML check boxes `api_key_scopes[]`, or JSON) or a string with scopes separated by spaces.
+
 JSON responses (with the `json` feature):
 
-- `POST /create-api-key` returns `{"api_key": "rak_...", "id": 1, "name": "...", "scopes": [...], "expires_at": "..."}`.
+- `POST /create-api-key` returns `{"api_key": "rak_...", "api_key_id": 1, "name": "...", "hint": "rak_Abcd", "scopes": [...], "expires_at": "<ISO 8601 or null>", "success": "..."}`.
 - `POST /api-keys` returns a list. Each item contains `id`, `name`, `hint`, `scopes`, `created_at`, `last_use`, `expires_at`, `revoked_at`. No item contains the digest.
 
 Templates: `api-keys.str`, `create-api-key.str`, `api-key-created.str`, `revoke-api-key.str` in the `templates/` directory of this gem.
+The feature overrides `template_path`. An application template with the same name has priority.
 
 Internal request methods: `create_api_key`, `api_keys`, `revoke_api_key`.
 
@@ -223,7 +233,8 @@ Internal request methods: `create_api_key`, `api_keys`, `revoke_api_key`.
 | `api_key_realm` | `"api"` |
 | `api_keys_table` | `:account_api_keys` |
 | `api_keys_*_column` | One method for each column in section 4 |
-| `api_keys_limit` | `10` active API keys for each account |
+| `api_keys_limit` | `10` active API keys for each account. `nil` removes the limit. |
+| `api_key_name_max_length` | `100` |
 | `api_key_scopes` | `[]` |
 | `api_key_max_lifetime` | `nil` (no limit). A value makes the expiration date required. |
 | `revoke_api_keys_on_password_change?` | `false` |
