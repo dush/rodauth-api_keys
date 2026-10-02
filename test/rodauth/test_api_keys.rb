@@ -3,10 +3,6 @@
 require "test_helper"
 
 class Rodauth::TestApiKeys < RodauthTestCase
-  def test_that_it_has_a_version_number
-    refute_nil ::Rodauth::ApiKeys::VERSION
-  end
-
   def test_harness_logs_in_with_password
     rodauth_app
     id = create_account

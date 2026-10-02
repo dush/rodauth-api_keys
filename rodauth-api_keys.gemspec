@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "lib/rodauth/api_keys/version"
-
 Gem::Specification.new do |spec|
   spec.name = "rodauth-api_keys"
-  spec.version = Rodauth::ApiKeys::VERSION
+  spec.version = "0.1.0"
   spec.authors = ["Pavel Dušánek"]
   spec.email = ["dusanek@iquest.cz"]
 
@@ -29,7 +27,7 @@ Gem::Specification.new do |spec|
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true).reject do |f|
       (f == gemspec) ||
-        f.start_with?(*%w[bin/ Gemfile .gitignore test/ .github/ .standard.yml])
+        f.start_with?(*%w[bin/ Gemfile .gitignore test/ .github/ .standard.yml AGENTS.md doc/implementation_plan.md])
     end
   end
   spec.bindir = "exe"

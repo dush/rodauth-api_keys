@@ -154,14 +154,25 @@ The `api_keys` feature uses the same method. Thus these methods work with no cha
 | `rodauth.api_key_authenticated?` | True if an API key authenticated the request. |
 | `rodauth.require_api_key_authentication` | Send a 401 response if no valid API key is in the request. |
 | `rodauth.current_api_key_id` | The ID of the API key that authenticated the request. |
+| `rodauth.current_api_key_scopes` | The scopes of the API key that authenticated the request. |
 | `rodauth.api_key_scope?(scope)` | True if the API key of the request has the scope. |
-| `rodauth.require_api_key_scope(*scopes)` | Send a 403 response if the API key does not have all the scopes. |
+| `rodauth.require_api_key_scope(*scopes)` | Call `require_authentication`. Then send a 403 response if the API key does not have all the scopes. |
 
 ### 5.5 Two-factor authentication
 
 `two_factor_base` makes `authenticated?` false when `authenticated_by` has less than two items and the account has a second factor.
 The `api_keys` feature overrides `two_factor_authenticated?` to return true for an API key request.
 Reason: the account used two factors when it created the API key.
+
+This override works only when `api_keys` comes before `two_factor_base` in the method lookup.
+Thus the application must enable `api_keys` after `two_factor_base` and the features that use it (`otp`, `sms_codes`, `webauthn`, `recovery_codes`).
+If the order is wrong, `post_configure` raises `Rodauth::ConfigurationError`.
+
+### 5.6 Error responses
+
+- The 401 and 403 responses have a plain text body, for example `invalid API key`.
+- When the application enables the `json` feature and the request uses JSON, the body is `{"error": "invalid API key"}`.
+- Each response calls `set_error_reason`: `:invalid_api_key`, `:api_key_required`, or `:insufficient_api_key_scope`.
 
 ## 6. Scopes
 
@@ -233,6 +244,7 @@ Auth methods that an application can override:
 | Revocation | Soft. Set `revoked_at` and keep the row. |
 | Version 0.1 | HTML templates, expiration, scopes, internal requests, limit of active API keys for each account. |
 | Expiration | Optional. The account selects any date. Rodauth refuses a date in the past and a date after `api_key_max_lifetime`. |
+| Expiration storage | The database calculates `expires_at` with its own clock: `Sequel.date_add(CURRENT_TIMESTAMP, seconds: n)`. This follows `set_deadline_value` in Rodauth. Ruby never writes a time value. `create_api_key` takes `expires_in:` in seconds. Step 6 converts the date from the form to seconds. |
 | `last_use` | Update at most one time in `api_key_last_use_update_interval` (default 60 seconds). Use one `UPDATE ... WHERE` statement. `nil` updates on each request. |
 | Password change | Do not revoke API keys. The `revoke_api_keys_on_password_change?` setting (default `false`) changes this. |
 | Scopes and cookie session | `require_api_key_scope` permits a request that the cookie session authenticated. Scopes limit only API keys. |
@@ -252,4 +264,4 @@ Auth methods that an application can override:
 8. Add `after_close_account` and the `jwt` integration. Write tests.
 9. Add `internal_request_method` for create, list, and revoke. Write tests.
 10. Write `README.md`: installation, migration, configuration, and examples.
-11. Update `sig/rodauth/api_keys.rbs`, `AGENTS.md`, and the GitHub workflow matrix.
+11. Update `AGENTS.md`.

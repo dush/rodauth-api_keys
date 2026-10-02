@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "rodauth/api_keys"
+require "rodauth"
 
 require "bcrypt"
 require "json"
@@ -68,12 +68,30 @@ class RodauthTestCase < Minitest::Test
     @app = app
   end
 
+  # Make an app with the api_keys feature. Return a Rodauth object without a request.
+  # Use it for methods that do not read the request.
+  def rodauth_object(&config)
+    rodauth_app do
+      enable :api_keys
+      instance_exec(&config) if config
+    end
+    app.rodauth.allocate
+  end
+
   # Add an open account with a password. Return the account ID.
   def create_account(login: LOGIN, password: PASSWORD)
     id = DB[:accounts].insert(email: login, status_id: 2)
     hash = BCrypt::Password.create(password, cost: BCrypt::Engine::MIN_COST)
     DB[:account_password_hashes].insert(id: id, password_hash: hash)
     id
+  end
+
+  # Add a row to the API keys table. Return the row ID.
+  def insert_api_key(account_id, **columns)
+    @api_key_count = (@api_key_count || 0) + 1
+    DB[:account_api_keys].insert(
+      {account_id: account_id, name: "key #{@api_key_count}", digest: "digest #{@api_key_count}", hint: "rak_Abcd"}.merge(columns)
+    )
   end
 
   def login(login: LOGIN, password: PASSWORD)

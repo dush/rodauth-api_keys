@@ -71,8 +71,10 @@ Read `lib/rodauth/features/*.rb` in Rodauth before you write a new feature metho
   Examples: `route`, `view`, `translate`, `set_notice_flash`, `set_redirect_error_flash`.
 - Use Sequel for all database access. Use `db` and `ds` from Rodauth.
 - Supply the hooks `before_*` and `after_*` for each action.
-- Keep `lib/rodauth/api_keys.rb` and `lib/rodauth/api_keys/version.rb`.
-  They load the gem and set the version.
+- Do not add the files `lib/rodauth/api_keys.rb` or `lib/rodauth/api_keys/version.rb`.
+  `Feature.define` sets the constant `Rodauth::ApiKeys` to the feature module.
+  A second `Rodauth::ApiKeys` module causes a conflict.
+- Set the gem version in `rodauth-api_keys.gemspec` only.
 
 ## Security rules
 
@@ -109,9 +111,8 @@ Obey these rules:
 3. Test the feature in a Roda app with Rodauth, Sequel, and an SQLite in-memory database.
 4. Write a test for each new configuration method and each route.
 5. Write a test for each security rule in this file.
-6. Update `sig/rodauth/api_keys.rbs` when you change a public API.
-7. Update `README.md` when you add or change a configuration method.
-8. Do not add a runtime dependency other than `rodauth` without approval from a maintainer.
+6. Update `README.md` when you add or change a configuration method.
+7. Do not add a runtime dependency other than `rodauth` without approval from a maintainer.
 
 ## Commits
 
