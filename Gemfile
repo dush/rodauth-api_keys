@@ -14,6 +14,7 @@ gem "standard", "~> 1.3"
 
 # Test dependencies: a Roda app with Rodauth and an SQLite database.
 gem "bcrypt"
+gem "jwt"
 gem "rack-test"
 gem "roda"
 gem "sequel"

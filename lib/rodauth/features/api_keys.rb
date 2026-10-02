@@ -103,6 +103,7 @@ module Rodauth
 
     auth_methods(
       :account_api_keys,
+      :revoke_all_api_keys,
       :revoke_api_key,
       :api_key_created_response,
       :parse_api_key_expires_at,
@@ -233,7 +234,7 @@ module Rodauth
 
       # This feature overrides methods of these features. Thus it must come before them in the method lookup.
       ancestors = self.class.ancestors
-      [:two_factor_base].each do |feature_name|
+      [:two_factor_base, :jwt].each do |feature_name|
         next unless (feature = FEATURES[feature_name]) && ancestors.include?(feature)
         if ancestors.index(feature) < ancestors.index(FEATURES[:api_keys])
           raise ConfigurationError, "enable :api_keys after :#{feature_name} and the features that use it"
@@ -383,6 +384,27 @@ module Rodauth
       active_api_keys_ds.where(api_keys_id_column => id).update(api_keys_revoked_at_column => Sequel::CURRENT_TIMESTAMP) == 1
     end
 
+    # Revoke all active API keys of the account. Return the number of revoked API keys.
+    def revoke_all_api_keys
+      active_api_keys_ds.update(api_keys_revoked_at_column => Sequel::CURRENT_TIMESTAMP)
+    end
+
+    # Rodauth calls this method after a password change, a password reset, and other changes to the account.
+    def clear_tokens(reason)
+      super
+      if revoke_api_keys_on_password_change? && [:change_password, :reset_password].include?(reason)
+        revoke_all_api_keys
+      end
+    end
+
+    # The jwt feature reads each Authorization header that does not start with Basic or Digest.
+    # Do not let it read an API key.
+    def jwt_token
+      return if api_key_from_request
+
+      super
+    end
+
     # Show the new API key one time. Tell the browser and proxies not to keep a copy of the page.
     def api_key_created_response
       set_response_header("cache-control", "no-store")
@@ -457,6 +479,23 @@ module Rodauth
 
     def use_date_arithmetic?
       true
+    end
+
+    # A closed account must not use its API keys.
+    # If close_account calls delete_account, remove the API key rows first, because of the foreign key.
+    def after_close_account
+      super if defined?(super)
+      if delete_account_on_close?
+        api_keys_ds.delete
+      else
+        revoke_all_api_keys
+      end
+    end
+
+    # Do not send a JWT in a response to a request that an API key authenticated.
+    # Such a JWT would authenticate the account without the API key, also after the revocation of the API key.
+    def set_jwt
+      super unless @api_key_row
     end
 
     def api_key_json(api_key)

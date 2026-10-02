@@ -168,7 +168,22 @@ This override works only when `api_keys` comes before `two_factor_base` in the m
 Thus the application must enable `api_keys` after `two_factor_base` and the features that use it (`otp`, `sms_codes`, `webauthn`, `recovery_codes`).
 If the order is wrong, `post_configure` raises `Rodauth::ConfigurationError`.
 
-### 5.6 Error responses
+### 5.6 The `jwt` feature
+
+- The `api_keys` feature overrides `jwt_token`. It returns `nil` when the header contains an API key.
+  Without this override, the `jwt` feature tries to decode the API key, and it uses JSON for each request with an API key.
+- The `api_keys` feature overrides `set_jwt`. It does not send a JWT in the response to a request that an API key authenticated.
+  Such a JWT would authenticate the account without the API key, also after the revocation of the API key.
+- The application must enable `api_keys` after `jwt`. If the order is wrong, `post_configure` raises `Rodauth::ConfigurationError`.
+
+### 5.7 Account changes
+
+- `close_account` revokes all API keys of the account (`after_close_account`).
+  If `delete_account_on_close?` is true, it removes the API key rows, because of the foreign key.
+- `clear_tokens(reason)` revokes all API keys for `:change_password` and `:reset_password` when `revoke_api_keys_on_password_change?` is true.
+- `revoke_all_api_keys` revokes all active API keys of the account.
+
+### 5.8 Error responses
 
 - The 401 and 403 responses have a plain text body, for example `invalid API key`.
 - When the application enables the `json` feature and the request uses JSON, the body is `{"error": "invalid API key"}`.
