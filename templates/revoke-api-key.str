@@ -1,0 +1,19 @@
+#{(active_api_keys = rodauth.account_api_keys.select { |api_key| api_key[:status] == :active }).empty? ? "<p id=\"no-active-api-keys\">#{rodauth.no_active_api_keys_message}</p>" : nil}
+#{unless active_api_keys.empty?
+  last_id = active_api_keys.last[:id]
+  radios = active_api_keys.map do |api_key|
+    id = "api-key-id-#{h api_key[:id]}"
+    input = rodauth.input_field_string(rodauth.api_key_id_param, id, :type=>"radio", :class=>"form-check-input", :skip_error_message=>true, :value=>h(api_key[:id]), :required=>false)
+    last_use = api_key[:last_use] ? h(api_key[:last_use].strftime(rodauth.strftime_format)) : rodauth.api_key_never_label
+    label = "<label class=\"form-check-label\" for=\"#{id}\">#{h api_key[:name]} (<code>#{h api_key[:hint]}&hellip;</code>), #{rodauth.api_key_last_use_label}: #{last_use}</label>"
+    error = rodauth.formatted_field_error(rodauth.api_key_id_param) if api_key[:id] == last_id
+    "<div class=\"form-check radio\">#{input}#{label}#{error}</div>"
+  end.join("\n")
+  "<form method=\"post\" class=\"rodauth\" role=\"form\" id=\"revoke-api-key-form\">" \
+    "#{rodauth.revoke_api_key_additional_form_tags}" \
+    "#{rodauth.csrf_tag}" \
+    "<fieldset class=\"form-group mb-3\">#{radios}</fieldset>" \
+    "#{rodauth.render("password-field") if rodauth.modifications_require_password?}" \
+    "#{rodauth.button(rodauth.revoke_api_key_button, :class=>"btn btn-danger")}" \
+  "</form>"
+end}

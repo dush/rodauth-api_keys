@@ -10,7 +10,7 @@ module Rodauth
     # Page to create an API key.
     notice_flash "Your API key is ready. Copy it now. You cannot see it again.", "create_api_key"
     error_flash "Unable to create the API key", "create_api_key"
-    loaded_templates %w[create-api-key api-key-created password-field]
+    loaded_templates %w[api-keys create-api-key api-key-created revoke-api-key password-field]
     view "create-api-key", "Create API Key", "create_api_key"
     view "api-key-created", "API Key Created", "api_key_created"
     additional_form_tags "create_api_key"
@@ -32,6 +32,32 @@ module Rodauth
     translatable_method :api_keys_limit_message, "maximum number of active API keys"
     translatable_method :api_key_management_not_permitted_message, "an API key cannot manage API keys"
     auth_value_method :api_key_management_not_permitted_error_status, 403
+
+    # Page with the list of API keys.
+    view "api-keys", "API Keys", "api_keys"
+    translatable_method :api_key_created_at_label, "Created"
+    translatable_method :api_key_last_use_label, "Last use"
+    translatable_method :api_key_status_label, "Status"
+    translatable_method :api_key_active_label, "Active"
+    translatable_method :api_key_expired_label, "Expired"
+    translatable_method :api_key_revoked_label, "Revoked"
+    translatable_method :api_key_never_label, "Never"
+    translatable_method :api_keys_empty_message, "There are no API keys."
+    translatable_method :create_api_key_link_text, "Create API Key"
+    translatable_method :revoke_api_key_link_text, "Revoke API Key"
+
+    # Page to revoke an API key.
+    notice_flash "The API key is revoked", "revoke_api_key"
+    error_flash "Unable to revoke the API key", "revoke_api_key"
+    view "revoke-api-key", "Revoke API Key", "revoke_api_key"
+    additional_form_tags "revoke_api_key"
+    button "Revoke API Key", "revoke_api_key"
+    before "revoke_api_key"
+    after "revoke_api_key"
+    redirect(:revoke_api_key) { api_keys_path }
+    response "revoke_api_key"
+    translatable_method :invalid_api_key_id_message, "select an active API key"
+    translatable_method :no_active_api_keys_message, "There are no active API keys."
 
     # Format of an API key: "<api_key_prefix>_<secret>".
     auth_value_method :api_key_prefix, "rak"
@@ -76,6 +102,8 @@ module Rodauth
     auth_value_methods :api_key_authorization_regexp
 
     auth_methods(
+      :account_api_keys,
+      :revoke_api_key,
       :api_key_created_response,
       :parse_api_key_expires_at,
       :valid_api_key_name?,
@@ -101,6 +129,59 @@ module Rodauth
 
     # The API key that the create-api-key route added in this request. The created page shows it.
     attr_reader :created_api_key
+
+    route(:api_keys) do |r|
+      require_account
+      require_api_key_management_session
+      before_api_keys_route
+
+      if respond_to?(:use_json?) && use_json?
+        json_response["api_keys"] = account_api_keys.map { |api_key| api_key_json(api_key) }
+      end
+
+      r.get do
+        api_keys_view
+      end
+
+      r.post do
+        api_keys_view
+      end
+    end
+
+    route(:revoke_api_key) do |r|
+      require_account
+      require_api_key_management_session
+      before_revoke_api_key_route
+
+      r.get do
+        revoke_api_key_view
+      end
+
+      r.post do
+        catch_error do
+          unless (id = param_or_nil(api_key_id_param))
+            throw_error_reason(:invalid_api_key_id, invalid_field_error_status, api_key_id_param, invalid_api_key_id_message)
+          end
+
+          if modifications_require_password? && !password_match?(param(password_param))
+            throw_error_reason(:invalid_password, invalid_password_error_status, password_param, invalid_password_message)
+          end
+
+          transaction do
+            before_revoke_api_key
+            unless revoke_api_key(id)
+              throw_error_reason(:invalid_api_key_id, invalid_field_error_status, api_key_id_param, invalid_api_key_id_message)
+            end
+            after_revoke_api_key
+          end
+
+          revoke_api_key_response
+        end
+
+        set_error_flash revoke_api_key_error_flash
+        revoke_api_key_view
+      end
+    end
 
     route(:create_api_key) do |r|
       require_account
@@ -270,6 +351,38 @@ module Rodauth
       nil
     end
 
+    # Return the API keys of the account, the newest first. Each item is a hash with these keys:
+    # :id, :name, :hint, :scopes (array), :created_at, :last_use, :expires_at, :revoked_at, and :status.
+    # The status is :active, :expired, or :revoked. The database calculates it with its own clock.
+    def account_api_keys
+      status = Sequel.case(
+        [
+          [{api_keys_revoked_at_column => nil}, Sequel.case([[active_api_key_condition, "active"]], "expired")]
+        ],
+        "revoked"
+      )
+      api_keys_ds.select_append(status.as(:api_key_status)).reverse(api_keys_id_column).map do |row|
+        {
+          id: row[api_keys_id_column],
+          name: row[api_keys_name_column],
+          hint: row[api_keys_hint_column],
+          scopes: row[api_keys_scopes_column].to_s.split(" "),
+          created_at: convert_timestamp(row[api_keys_created_at_column]),
+          last_use: convert_timestamp(row[api_keys_last_use_column]),
+          expires_at: convert_timestamp(row[api_keys_expires_at_column]),
+          revoked_at: convert_timestamp(row[api_keys_revoked_at_column]),
+          status: row[:api_key_status].to_sym
+        }
+      end
+    end
+
+    # Revoke the active API key of the account with this ID. Return true if the API key was active.
+    def revoke_api_key(id)
+      return false unless (id = convert_token_id(id))
+
+      active_api_keys_ds.where(api_keys_id_column => id).update(api_keys_revoked_at_column => Sequel::CURRENT_TIMESTAMP) == 1
+    end
+
     # Show the new API key one time. Tell the browser and proxies not to keep a copy of the page.
     def api_key_created_response
       set_response_header("cache-control", "no-store")
@@ -344,6 +457,16 @@ module Rodauth
 
     def use_date_arithmetic?
       true
+    end
+
+    def api_key_json(api_key)
+      api_key.transform_keys(&:to_s).merge(
+        "status" => api_key[:status].to_s,
+        "created_at" => api_key[:created_at]&.iso8601,
+        "last_use" => api_key[:last_use]&.iso8601,
+        "expires_at" => api_key[:expires_at]&.iso8601,
+        "revoked_at" => api_key[:revoked_at]&.iso8601
+      )
     end
 
     def template_path(page)

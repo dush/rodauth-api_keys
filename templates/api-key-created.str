@@ -2,3 +2,4 @@
   <label for="api-key" class="form-label">#{rodauth.api_key_label}</label>
   <input type="text" class="form-control" id="api-key" readonly="readonly" autocomplete="off" value="#{h rodauth.created_api_key}"/>
 </div>
+<p><a href="#{rodauth.api_keys_path}" id="api-keys-link">#{rodauth.api_keys_page_title}</a></p>

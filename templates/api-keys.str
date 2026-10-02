@@ -1,0 +1,30 @@
+#{(api_keys = rodauth.account_api_keys).empty? ? "<p id=\"api-keys-empty\">#{rodauth.api_keys_empty_message}</p>" : nil}
+#{unless api_keys.empty?
+  format_time = lambda { |time| time ? h(time.strftime(rodauth.strftime_format)) : rodauth.api_key_never_label }
+  status_label = {active: rodauth.api_key_active_label, expired: rodauth.api_key_expired_label, revoked: rodauth.api_key_revoked_label}
+  show_scopes = !rodauth.api_key_scopes.empty?
+  rows = api_keys.map do |api_key|
+    "<tr id=\"api-key-#{h api_key[:id]}\" class=\"api-key-#{api_key[:status]}\">" \
+      "<td>#{h api_key[:name]}</td>" \
+      "<td><code>#{h api_key[:hint]}&hellip;</code></td>" \
+      "#{"<td>#{h api_key[:scopes].join(" ")}</td>" if show_scopes}" \
+      "<td>#{format_time.call(api_key[:created_at])}</td>" \
+      "<td>#{format_time.call(api_key[:last_use])}</td>" \
+      "<td>#{format_time.call(api_key[:expires_at])}</td>" \
+      "<td>#{status_label[api_key[:status]]}</td>" \
+    "</tr>"
+  end.join("\n")
+  "<table class=\"table\" id=\"api-keys\"><thead><tr>" \
+    "<th>#{rodauth.api_key_name_label}</th>" \
+    "<th>#{rodauth.api_key_label}</th>" \
+    "#{"<th>#{rodauth.api_key_scopes_label}</th>" if show_scopes}" \
+    "<th>#{rodauth.api_key_created_at_label}</th>" \
+    "<th>#{rodauth.api_key_last_use_label}</th>" \
+    "<th>#{rodauth.api_key_expires_at_label}</th>" \
+    "<th>#{rodauth.api_key_status_label}</th>" \
+  "</tr></thead><tbody>#{rows}</tbody></table>"
+end}
+<p>
+  <a href="#{rodauth.create_api_key_path}" id="create-api-key-link">#{rodauth.create_api_key_link_text}</a>
+  #{"<a href=\"#{rodauth.revoke_api_key_path}\" id=\"revoke-api-key-link\">#{rodauth.revoke_api_key_link_text}</a>" if api_keys.any? { |api_key| api_key[:status] == :active }}
+</p>

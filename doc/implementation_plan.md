@@ -215,7 +215,11 @@ The `api_key_scopes` parameter accepts an array (HTML check boxes `api_key_scope
 JSON responses (with the `json` feature):
 
 - `POST /create-api-key` returns `{"api_key": "rak_...", "api_key_id": 1, "name": "...", "hint": "rak_Abcd", "scopes": [...], "expires_at": "<ISO 8601 or null>", "success": "..."}`.
-- `POST /api-keys` returns a list. Each item contains `id`, `name`, `hint`, `scopes`, `created_at`, `last_use`, `expires_at`, `revoked_at`. No item contains the digest.
+- `POST /api-keys` returns `{"api_keys": [...]}`, the newest first. Each item contains `id`, `name`, `hint`, `scopes`, `created_at`, `last_use`, `expires_at`, `revoked_at`, and `status` (`active`, `expired`, or `revoked`). No item contains the digest.
+- `POST /revoke-api-key` with `api_key_id` returns `{"success": "The API key is revoked"}`.
+
+The database calculates the status of each API key with its own clock (a `CASE` expression with the active condition from section 4).
+After a revocation, the HTML route goes to the `api-keys` page.
 
 Templates: `api-keys.str`, `create-api-key.str`, `api-key-created.str`, `revoke-api-key.str` in the `templates/` directory of this gem.
 The feature overrides `template_path`. An application template with the same name has priority.
