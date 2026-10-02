@@ -124,6 +124,43 @@ class Rodauth::TestApiKeysLifecycle < RodauthTestCase
     end
   end
 
+  def test_audit_logging_logs_create_and_revoke
+    DB.create_table(:account_authentication_audit_logs) do
+      primary_key :id
+      Integer :account_id, null: false
+      DateTime :at, null: false, default: Sequel::CURRENT_TIMESTAMP
+      String :message, null: false
+      String :metadata
+    end
+    setup_app(features: [:audit_logging])
+    login
+
+    post "/create-api-key", "api_key_name" => "CI", "password" => PASSWORD
+    id = DB[:account_api_keys].get(:id)
+    post "/revoke-api-key", "api_key_id" => id.to_s, "password" => PASSWORD
+
+    messages = DB[:account_authentication_audit_logs].where(account_id: @account_id).order(:id).select_map(:message)
+    assert_equal %w[login create_api_key revoke_api_key], messages
+  end
+
+  # The README shows this command to remove old rows.
+  def test_readme_cleanup_command
+    setup_app
+    old_revoked_id, = create_key
+    old_expired_id, = create_key
+    new_revoked_id, = create_key
+    active_id, = create_key
+    ds = DB[:account_api_keys]
+    ds.where(id: old_revoked_id).update(revoked_at: Sequel.date_sub(Sequel::CURRENT_TIMESTAMP, days: 100))
+    ds.where(id: old_expired_id).update(expires_at: Sequel.date_sub(Sequel::CURRENT_TIMESTAMP, days: 100))
+    ds.where(id: new_revoked_id).update(revoked_at: Sequel.date_sub(Sequel::CURRENT_TIMESTAMP, days: 10))
+
+    cutoff = Sequel.date_sub(Sequel::CURRENT_TIMESTAMP, days: 90)
+    DB[:account_api_keys].where { (revoked_at < cutoff) | (expires_at < cutoff) }.delete
+
+    assert_equal [new_revoked_id, active_id], ds.order(:id).select_map(:id)
+  end
+
   def test_jwt_does_not_read_api_key
     setup_app(features: [:jwt], json: true) { jwt_secret "jwt-secret" }
     _, api_key = create_key

@@ -1,6 +1,6 @@
 # Implementation plan: `api_keys` feature
 
-Status: approved. Section 9 lists the decisions.
+Status: implemented (version 0.1.0). Section 9 lists the decisions.
 
 ## 1. Goal
 

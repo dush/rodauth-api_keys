@@ -65,7 +65,9 @@ Read `lib/rodauth/features/*.rb` in Rodauth before you write a new feature metho
 - Define the feature with `Rodauth::Feature.define(:api_keys, :ApiKeys)`.
 - Declare dependencies with `depends`.
 - Make each setting configurable. Use `auth_value_method` for values.
-  Use `auth_methods` for methods. Use `auth_private_methods` for private methods.
+  Use `auth_methods` for methods. A method in `auth_methods` can be private.
+  Do not use `auth_private_methods`, because it needs a method with the name `_<name>`.
+- Call `uses_instance_variables` one time only, with all instance variables. A second call replaces the first list.
 - Use the Rodauth prefixes for names: `api_key_`, `api_keys_`.
 - Use the Rodauth helpers for routes, templates, buttons, flash messages, and redirects.
   Examples: `route`, `view`, `translate`, `set_notice_flash`, `set_redirect_error_flash`.
@@ -75,6 +77,21 @@ Read `lib/rodauth/features/*.rb` in Rodauth before you write a new feature metho
   `Feature.define` sets the constant `Rodauth::ApiKeys` to the feature module.
   A second `Rodauth::ApiKeys` module causes a conflict.
 - Set the gem version in `rodauth-api_keys.gemspec` only.
+- Put templates in `templates/`. Add each template to `loaded_templates`.
+  The `template_path` override finds them. An application template with the same name has priority.
+- In a template, escape each value from the database or the request with `h`.
+- A route block must halt the request on success, for example with a redirect or `return_response`.
+  `catch_error` ignores the value of its block.
+- In an internal request (`internal_request?`), return data with `_return_from_internal_request`.
+- Do not compare database times with `Time.now` in Ruby. Let the database compare with `Sequel::CURRENT_TIMESTAMP`.
+  To write a time, use `Sequel.date_add(Sequel::CURRENT_TIMESTAMP, seconds: n)`.
+
+### Feature order
+
+This feature overrides methods of `two_factor_base` and `jwt`. These overrides work only when `api_keys` comes later in the `enable` list.
+`post_configure` raises `Rodauth::ConfigurationError` if the order is wrong.
+If you override a method of another feature, add that feature to the check in `post_configure`.
+Use `super if defined?(super)` in hooks such as `after_close_account`. Then the order is not important for them.
 
 ## Security rules
 
@@ -109,6 +126,9 @@ Obey these rules:
 1. Run `bundle exec rake` before you finish a task. All tests and lint checks must pass.
 2. Write tests with Minitest.
 3. Test the feature in a Roda app with Rodauth, Sequel, and an SQLite in-memory database.
+   Use the helpers in `test/test_helper.rb`: `rodauth_app`, `rodauth_object`, `create_account`, `login`, `json_request`, and `insert_api_key`.
+   Put the tests in `test/rodauth/test_api_keys_<topic>.rb`.
+   For a security fix, remove the fix for a short time and make sure that its test fails.
 4. Write a test for each new configuration method and each route.
 5. Write a test for each security rule in this file.
 6. Update `README.md` when you add or change a configuration method.
