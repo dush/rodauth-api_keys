@@ -1,0 +1,38 @@
+name: Release
+
+# Start this workflow manually, after you push the new version to main.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Do not run two releases at the same time.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Push gem to RubyGems.org
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Set the same environment name in the trusted publisher on RubyGems.org.
+    environment: release
+
+    permissions:
+      id-token: write # Trusted publishing needs this permission.
+      contents: write # "rake release" needs this permission to push the version tag.
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ruby
+          bundler-cache: true
+      - name: Run the tests and the linter
+        run: bundle exec rake
+      - uses: rubygems/release-gem@v1

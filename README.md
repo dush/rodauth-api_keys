@@ -357,8 +357,17 @@ After you clone the repository, run `bin/setup` to install the dependencies.
 - Run the linter only: `bundle exec rake standard`
 - Start a console: `bin/console`
 
-To release a new version, change the version number in `rodauth-api_keys.gemspec`. Then run `bundle exec rake release`.
-This command makes a git tag for the version, pushes the commits and the tag, and pushes the `.gem` file to [rubygems.org](https://rubygems.org).
+To release a new version:
+
+1. Change the version number in `rodauth-api_keys.gemspec`.
+2. Add the version and the date to `CHANGELOG.md`.
+3. Commit the change and push it to `main`.
+4. On GitHub, start the "Release" workflow (`.github/workflows/release.yml`) on `main`.
+
+The workflow runs the tests and the linter. Then it runs `bundle exec rake release` with the [Release Gem](https://github.com/rubygems/release-gem) action.
+This command makes a git tag for the version, pushes the tag, and pushes the `.gem` file to [rubygems.org](https://rubygems.org).
+If the tag exists, the command does not make it again.
+The workflow uses [trusted publishing](https://guides.rubygems.org/trusted-publishing/). It does not need an API key of rubygems.org.
 
 ## Contributing
 
