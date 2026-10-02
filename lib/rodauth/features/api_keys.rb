@@ -101,6 +101,10 @@ module Rodauth
 
     auth_value_methods :api_key_authorization_regexp
 
+    internal_request_method :create_api_key
+    internal_request_method :api_keys
+    internal_request_method :revoke_api_key
+
     auth_methods(
       :account_api_keys,
       :revoke_all_api_keys,
@@ -135,6 +139,7 @@ module Rodauth
       require_account
       require_api_key_management_session
       before_api_keys_route
+      _return_from_internal_request(account_api_keys) if internal_request?
 
       if respond_to?(:use_json?) && use_json?
         json_response["api_keys"] = account_api_keys.map { |api_key| api_key_json(api_key) }
@@ -356,25 +361,7 @@ module Rodauth
     # :id, :name, :hint, :scopes (array), :created_at, :last_use, :expires_at, :revoked_at, and :status.
     # The status is :active, :expired, or :revoked. The database calculates it with its own clock.
     def account_api_keys
-      status = Sequel.case(
-        [
-          [{api_keys_revoked_at_column => nil}, Sequel.case([[active_api_key_condition, "active"]], "expired")]
-        ],
-        "revoked"
-      )
-      api_keys_ds.select_append(status.as(:api_key_status)).reverse(api_keys_id_column).map do |row|
-        {
-          id: row[api_keys_id_column],
-          name: row[api_keys_name_column],
-          hint: row[api_keys_hint_column],
-          scopes: row[api_keys_scopes_column].to_s.split(" "),
-          created_at: convert_timestamp(row[api_keys_created_at_column]),
-          last_use: convert_timestamp(row[api_keys_last_use_column]),
-          expires_at: convert_timestamp(row[api_keys_expires_at_column]),
-          revoked_at: convert_timestamp(row[api_keys_revoked_at_column]),
-          status: row[:api_key_status].to_sym
-        }
-      end
+      api_key_items(api_keys_ds)
     end
 
     # Revoke the active API key of the account with this ID. Return true if the API key was active.
@@ -410,17 +397,11 @@ module Rodauth
       set_response_header("cache-control", "no-store")
       set_notice_now_flash create_api_key_notice_flash
 
+      item = api_key_items(api_keys_ds.where(api_keys_id_column => created_api_key_id)).first
+      _return_from_internal_request(item.merge(api_key: created_api_key)) if internal_request?
+
       if respond_to?(:use_json?) && use_json?
-        row = api_keys_table_ds.where(api_keys_id_column => created_api_key_id).first
-        expires_at = row[api_keys_expires_at_column]
-        json_response.merge!(
-          "api_key" => created_api_key,
-          "api_key_id" => created_api_key_id,
-          "name" => row[api_keys_name_column],
-          "hint" => row[api_keys_hint_column],
-          "scopes" => row[api_keys_scopes_column].to_s.split(" "),
-          "expires_at" => (convert_timestamp(expires_at).iso8601 if expires_at)
-        )
+        json_response.merge!(api_key_json(item), "api_key" => created_api_key)
         return_json_response
       end
 
@@ -496,6 +477,29 @@ module Rodauth
     # Such a JWT would authenticate the account without the API key, also after the revocation of the API key.
     def set_jwt
       super unless @api_key_row
+    end
+
+    # Return the items for the rows of the dataset, the newest first.
+    def api_key_items(ds)
+      status = Sequel.case(
+        [
+          [{api_keys_revoked_at_column => nil}, Sequel.case([[active_api_key_condition, "active"]], "expired")]
+        ],
+        "revoked"
+      )
+      ds.select_append(status.as(:api_key_status)).reverse(api_keys_id_column).map do |row|
+        {
+          id: row[api_keys_id_column],
+          name: row[api_keys_name_column],
+          hint: row[api_keys_hint_column],
+          scopes: row[api_keys_scopes_column].to_s.split(" "),
+          created_at: convert_timestamp(row[api_keys_created_at_column]),
+          last_use: convert_timestamp(row[api_keys_last_use_column]),
+          expires_at: convert_timestamp(row[api_keys_expires_at_column]),
+          revoked_at: convert_timestamp(row[api_keys_revoked_at_column]),
+          status: row[:api_key_status].to_sym
+        }
+      end
     end
 
     def api_key_json(api_key)

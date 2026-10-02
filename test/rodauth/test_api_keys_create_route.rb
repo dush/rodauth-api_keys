@@ -358,7 +358,11 @@ class Rodauth::TestApiKeysCreateRoute < RodauthTestCase
     assert_equal 200, last_response.status
     assert_equal "no-store", last_response["cache-control"]
     assert_match(/\A#{API_KEY_REGEXP}\z/o, body["api_key"])
-    assert_equal api_key_rows.get(:id), body["api_key_id"]
+    assert_equal api_key_rows.get(:id), body["id"]
+    assert_equal "active", body["status"]
+    refute_nil Time.iso8601(body["created_at"])
+    assert_nil body["last_use"]
+    assert_nil body["revoked_at"]
     assert_equal "CI server", body["name"]
     assert_equal body["api_key"][0, 8], body["hint"]
     assert_equal ["read"], body["scopes"]
