@@ -136,6 +136,56 @@ class Rodauth::TestApiKeysAuthentication < RodauthTestCase
     assert_equal 200, last_response.status
   end
 
+  def test_expiration_header_contains_expiration_time
+    api_key = setup_api_key(create: {expires_in: 3600})
+
+    get "/require-authentication", {}, bearer(api_key)
+
+    assert_equal 200, last_response.status
+    expires_at = Time.httpdate(last_response["api-key-expiration"])
+    assert_in_delta Time.now + 3600, expires_at, 5
+  end
+
+  def test_expiration_header_is_absent_for_api_key_without_expiration
+    api_key = setup_api_key
+
+    get "/require-authentication", {}, bearer(api_key)
+
+    assert_equal 200, last_response.status
+    assert_nil last_response["api-key-expiration"]
+  end
+
+  def test_expiration_header_is_absent_for_cookie_session
+    setup_api_key(create: {expires_in: 3600})
+    login
+
+    get "/require-authentication"
+
+    assert_equal 200, last_response.status
+    assert_nil last_response["api-key-expiration"]
+  end
+
+  def test_expiration_header_nil_removes_header
+    api_key = setup_api_key(create: {expires_in: 3600}) { api_key_expiration_header nil }
+
+    get "/require-authentication", {}, bearer(api_key)
+
+    assert_equal 200, last_response.status
+    refute last_response.headers.keys.any? { |key| key.include?("expiration") }
+  end
+
+  def test_expiration_header_name_and_value_are_configurable
+    api_key = setup_api_key(create: {expires_in: 3600}) do
+      api_key_expiration_header "api-key-expires-at"
+      api_key_expiration_header_value { |expires_at| expires_at.utc.iso8601 }
+    end
+
+    get "/require-authentication", {}, bearer(api_key)
+
+    assert_nil last_response["api-key-expiration"]
+    assert_in_delta Time.now + 3600, Time.iso8601(last_response["api-key-expires-at"]), 5
+  end
+
   def test_api_key_of_closed_account_sends_401
     api_key = setup_api_key { skip_status_checks? false }
     DB[:accounts].where(id: @account_id).update(status_id: 3)

@@ -159,6 +159,27 @@ An API key counts as full authentication. The account used all its authenticatio
 The feature records the time of use in `last_use`. It updates the column at most one time in `api_key_last_use_update_interval` seconds (default 60).
 Set the value to `nil` to update the column on each request.
 
+### Expiration header
+
+When an API key has an expiration time, each response to a request with that API key contains it in the `api-key-expiration` header.
+The value is an HTTP date:
+
+```
+api-key-expiration: Thu, 31 Dec 2026 22:59:59 GMT
+```
+
+A client can use the header to replace the API key before it expires. An API key without an expiration time gets no header.
+No standard header exists for this value. GitHub uses a similar header, `GitHub-Authentication-Token-Expiration`.
+The name does not start with `X-`, because [RFC 6648](https://www.rfc-editor.org/rfc/rfc6648) recommends against that prefix.
+
+```ruby
+api_key_expiration_header "myapp-key-expiration" # Change the header name.
+api_key_expiration_header nil                   # Remove the header.
+api_key_expiration_header_value do |expires_at| # Change the format of the value.
+  expires_at.utc.iso8601
+end
+```
+
 ## Management pages
 
 | Route | Description |
@@ -264,6 +285,7 @@ When you remove the account with `destroy`, the model also removes its API key r
 | `api_key_scopes` | `[]` | The permitted scope names. If the list is empty, the feature does not use scopes. |
 | `api_key_max_lifetime` | `nil` | The maximum lifetime in seconds. A value makes the expiration date necessary. |
 | `api_key_last_use_update_interval` | `60` | The minimum number of seconds between two updates of `last_use`. |
+| `api_key_expiration_header` | `"api-key-expiration"` | The response header with the expiration time of the API key. `nil` removes the header. |
 | `revoke_api_keys_on_password_change?` | `false` | Revoke all API keys after a password change or a password reset. |
 | `api_keys_table` | `:account_api_keys` | The table name. |
 | `api_keys_*_column` | see migration | One method for each column: `id`, `account_id`, `name`, `digest`, `hint`, `scopes`, `created_at`, `last_use`, `expires_at`, `revoked_at`. |
@@ -295,7 +317,7 @@ With the `audit_logging` feature, Rodauth logs the `create_api_key` and `revoke_
 
 ### Methods that you can override
 
-`generate_api_key`, `api_key_digest`, `api_key_digests`, `api_key_hint`, `api_key_from_request`, `api_key_insert_hash`, `create_api_key`, `revoke_api_key`, `revoke_all_api_keys`, `account_api_keys`, `valid_api_key_name?`, `valid_api_key_scopes?`, `parse_api_key_expires_at`, `update_api_key_last_use`, `api_key_created_response`, `api_key_authenticated?`, `api_key_scope?`, `require_api_key_authentication`, `require_api_key_scope`.
+`generate_api_key`, `api_key_digest`, `api_key_digests`, `api_key_hint`, `api_key_from_request`, `api_key_insert_hash`, `create_api_key`, `revoke_api_key`, `revoke_all_api_keys`, `account_api_keys`, `valid_api_key_name?`, `valid_api_key_scopes?`, `parse_api_key_expires_at`, `update_api_key_last_use`, `api_key_expiration_header_value`, `api_key_created_response`, `api_key_authenticated?`, `api_key_scope?`, `require_api_key_authentication`, `require_api_key_scope`.
 
 To add a column to each new row, override `api_key_insert_hash`:
 

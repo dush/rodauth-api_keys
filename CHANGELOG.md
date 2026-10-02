@@ -10,6 +10,7 @@ First version.
 - Keep only the key digest and the key hint in the database. Show the full API key one time only.
 - Add scopes, an optional expiration date, and a limit of active API keys for each account.
 - Record the last use of each API key.
+- Send the expiration time of the API key in the `api-key-expiration` response header.
 - Revoke all API keys of an account when the account closes. Optionally revoke them when the password changes.
 - Add internal request methods: `create_api_key`, `api_keys`, and `revoke_api_key`.
 - Register an `api_keys` association for rodauth-model.

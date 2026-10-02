@@ -96,6 +96,8 @@ module Rodauth
     auth_value_method :api_key_scopes, [].freeze
     auth_value_method :api_key_max_lifetime, nil
     auth_value_method :api_key_last_use_update_interval, 60
+    # A response to an API key request contains the expiration time of the API key in this header. nil removes the header.
+    auth_value_method :api_key_expiration_header, "api-key-expiration"
     auth_value_method :revoke_api_keys_on_password_change?, false
 
     # Request parameters.
@@ -136,7 +138,8 @@ module Rodauth
       :generate_api_key,
       :require_api_key_authentication,
       :require_api_key_scope,
-      :update_api_key_last_use
+      :update_api_key_last_use,
+      :api_key_expiration_header_value
     )
 
     uses_instance_variables(:@created_api_key_id, :@created_api_key, :@session, :@api_key_row)
@@ -339,6 +342,11 @@ module Rodauth
     # Return all digests that can match the API key. With hmac_old_secret, there are two digests.
     def api_key_digests(api_key)
       compute_hmacs(api_key)
+    end
+
+    # Return the value of the expiration header: an HTTP date, for example "Thu, 31 Dec 2026 12:00:00 GMT".
+    def api_key_expiration_header_value(expires_at)
+      expires_at.httpdate
     end
 
     # Record the time of use. Skip the update if the last update is more recent than api_key_last_use_update_interval.
@@ -614,7 +622,16 @@ module Rodauth
         api_keys_table_ds.where(api_keys_id_column => row[api_keys_id_column]).update(api_keys_digest_column => digests.first)
       end
       update_api_key_last_use
+      set_api_key_expiration_header
       @session
+    end
+
+    # Tell the client when the API key expires. An API key without an expiration time gets no header.
+    def set_api_key_expiration_header
+      return unless (header = api_key_expiration_header)
+      return unless (expires_at = convert_timestamp(@api_key_row[api_keys_expires_at_column]))
+
+      set_response_header(header, api_key_expiration_header_value(expires_at))
     end
 
     def api_key_account_open?(id)
